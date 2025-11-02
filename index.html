@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Link Extractor</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            padding: 1rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+        .input-section {
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: #f9f9f9;
+            border-radius: 6px;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #333;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-bottom: 1rem;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #0070f3;
+            box-shadow: 0 0 0 3px rgba(0,112,243,0.1);
+        }
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        button {
+            background: #0070f3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            flex: 1;
+        }
+        button:hover {
+            background: #0051cc;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background: #666;
+        }
+        button.secondary:hover {
+            background: #444;
+        }
+        button.secondary:disabled {
+            background: #ccc;
+        }
+        #status {
+            margin-top: 1rem;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        #status.loading {
+            background: #fff3cd;
+            color: #856404;
+            display: block;
+        }
+        #status.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+        #status.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+        #results {
+            margin-top: 2rem;
+        }
+        .stats {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: #e3f2fd;
+            border-radius: 6px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #0070f3;
+        }
+        .stat-label {
+            font-size: 0.875rem;
+            color: #666;
+        }
+        .links-container {
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: white;
+        }
+        .link-item {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+        }
+        .link-item:last-child {
+            border-bottom: none;
+        }
+        .link-item:hover {
+            background: #f9f9f9;
+        }
+        .link-text {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 0.25rem;
+        }
+        .link-url {
+            color: #0070f3;
+            font-size: 0.875rem;
+            word-break: break-all;
+            text-decoration: none;
+        }
+        .link-url:hover {
+            text-decoration: underline;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+        .download-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .download-buttons button {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 Link Extractor</h1>
+        <p>Extract all links from any webpage with optional keyword filtering.</p>
+
+        <div class="input-section">
+            <label for="urlInput">Enter URL:</label>
+            <input 
+                type="text" 
+                id="urlInput" 
+                placeholder="https://docs.python.org/"
+                value="https://docs.python.org/">
+
+            <label for="keywordInput">Filter by keyword (optional):</label>
+            <input 
+                type="text" 
+                id="keywordInput" 
+                placeholder="Enter keyword to filter links by visible text">
+
+            <div class="button-group">
+                <button onclick="extractLinks()" id="extractBtn">Extract Links</button>
+            </div>
+        </div>
+
+        <div id="status"></div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        let currentLinks = [];
+        let filteredLinks = [];
+
+        async function extractLinks() {
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+            const extractBtn = document.getElementById('extractBtn');
+            
+            const url = document.getElementById('urlInput').value.trim();
+            const keyword = document.getElementById('keywordInput').value.trim();
+
+            if (!url) {
+                statusDiv.className = 'error';
+                statusDiv.textContent = '❌ Please enter a URL';
+                return;
+            }
+
+            // Validate URL format
+            try {
+                new URL(url);
+            } catch {
+                statusDiv.className = 'error';
+                statusDiv.textContent = '❌ Please enter a valid URL (include https://)';
+                return;
+            }
+
+            // Show loading
+            statusDiv.className = 'loading';
+            statusDiv.textContent = '⏳ Extracting links from webpage...';
+            extractBtn.disabled = true;
+            resultsDiv.innerHTML = '';
+
+            try {
+                const response = await fetch('/api/extract', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url, keyword })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to extract links');
+                }
+
+                const data = await response.json();
+
+                currentLinks = data.all_links;
+                filteredLinks = data.filtered_links;
+
+                // Show success
+                statusDiv.className = 'success';
+                if (keyword) {
+                    statusDiv.textContent = `✅ Found ${filteredLinks.length} links matching "${keyword}" (${currentLinks.length} total links)`;
+                } else {
+                    statusDiv.textContent = `✅ Found ${currentLinks.length} links`;
+                }
+
+                // Display results
+                displayResults(keyword ? filteredLinks : currentLinks, currentLinks.length, filteredLinks.length, keyword);
+
+            } catch (error) {
+                statusDiv.className = 'error';
+                statusDiv.textContent = `❌ Error: ${error.message}`;
+                console.error('Error:', error);
+            } finally {
+                extractBtn.disabled = false;
+            }
+        }
+
+        function displayResults(links, totalCount, filteredCount, keyword) {
+            const resultsDiv = document.getElementById('results');
+
+            if (links.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No links found</h3>
+                        <p>${keyword ? `No links contain the keyword "${keyword}"` : 'This page has no links'}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const statsHtml = `
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-value">${keyword ? filteredCount : totalCount}</div>
+                        <div class="stat-label">${keyword ? 'Filtered Links' : 'Total Links'}</div>
+                    </div>
+                    ${keyword ? `
+                    <div class="stat-item">
+                        <div class="stat-value">${totalCount}</div>
+                        <div class="stat-label">Total Links</div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+
+            const downloadButtonsHtml = `
+                <div class="download-buttons">
+                    <button onclick="downloadMarkdown()" class="secondary">📄 Download as Markdown</button>
+                    <button onclick="downloadExcel()" class="secondary">📊 Download as Excel</button>
+                </div>
+            `;
+
+            const linksHtml = links.map(link => `
+                <div class="link-item">
+                    <div class="link-text">${escapeHtml(link.text || '(No text)')}</div>
+                    <a href="${escapeHtml(link.url)}" target="_blank" class="link-url">${escapeHtml(link.url)}</a>
+                </div>
+            `).join('');
+
+            resultsDiv.innerHTML = `
+                ${statsHtml}
+                ${downloadButtonsHtml}
+                <div class="links-container">
+                    ${linksHtml}
+                </div>
+            `;
+        }
+
+        async function downloadMarkdown() {
+            const keyword = document.getElementById('keywordInput').value.trim();
+            const links = keyword ? filteredLinks : currentLinks;
+            
+            let markdown = `# Extracted Links\n\n`;
+            markdown += `**Source URL:** ${document.getElementById('urlInput').value}\n\n`;
+            if (keyword) {
+                markdown += `**Filtered by keyword:** "${keyword}"\n\n`;
+            }
+            markdown += `**Total links:** ${links.length}\n\n`;
+            markdown += `---\n\n`;
+
+            links.forEach((link, index) => {
+                markdown += `## ${index + 1}. ${link.text || '(No text)'}\n\n`;
+                markdown += `[${link.url}](${link.url})\n\n`;
+            });
+
+            const blob = new Blob([markdown], { type: 'text/markdown' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'extracted_links.md';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        async function downloadExcel() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'loading';
+            statusDiv.textContent = '⏳ Generating Excel file...';
+
+            try {
+                const keyword = document.getElementById('keywordInput').value.trim();
+                const url = document.getElementById('urlInput').value.trim();
+
+                const response = await fetch('/api/export-excel', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        url, 
+                        keyword,
+                        all_links: currentLinks,
+                        filtered_links: filteredLinks
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to generate Excel file');
+                }
+
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = 'extracted_links.xlsx';
+                a.click();
+                window.URL.revokeObjectURL(downloadUrl);
+
+                statusDiv.className = 'success';
+                statusDiv.textContent = '✅ Excel file downloaded!';
+
+            } catch (error) {
+                statusDiv.className = 'error';
+                statusDiv.textContent = `❌ Error: ${error.message}`;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Allow Enter key to trigger extraction
+        document.getElementById('urlInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') extractLinks();
+        });
+        document.getElementById('keywordInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') extractLinks();
+        });
+    </script>
+</body>
+</html>
